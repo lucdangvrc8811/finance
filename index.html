@@ -143,6 +143,16 @@
             </div>
         </div>
 
+        <div class="glass-panel rounded-2xl p-6 shadow-sm">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-slate-800">Category Performance (MoM)</h2>
+                <div class="text-sm text-slate-500 bg-slate-100 px-3 py-1 rounded-full font-medium shadow-inner" id="categoryPerformanceDateLabel">Latest vs Previous</div>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" id="categoryPerformanceGrid">
+                <!-- Dynamically populated by JS -->
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             <!-- Growth Chart (Spans 2 columns) -->
@@ -1051,51 +1061,121 @@
                         
                         showModal('Confirm Import', 'Importing data will overwrite your current portfolio. Proceed?', 'warning',
                             () => {
-                                portfolioData = contents;
-                                saveData();
-                                updateAllViews();
-                                resetForm();
-                                showModal('Success', 'Data imported successfully.', 'success');
-                            },
-                            () => {
-                                // Clear input on cancel
-                                document.getElementById('importFile').value = '';
-                            }
-                        );
-                    } else {
-                        throw new Error('Invalid format');
-                    }
-                } catch (error) {
-                    showModal('Error', 'Failed to import file. Please ensure it is a valid JSON backup.', 'error');
+                    // Clear input on cancel
+                    document.getElementById('importFile').value = '';
                 }
-                // Clear input so same file can be selected again
-                document.getElementById('importFile').value = '';
-            };
-            reader.readAsText(file);
-        });
-
-        document.getElementById('resetDataBtn').addEventListener('click', () => {
-            if(portfolioData.length === 0) return;
-            showModal('Reset All Data', 'Are you ABSOLUTELY sure you want to delete ALL portfolio history? This action cannot be undone.', 'danger',
-                () => {
-                    portfolioData = [];
-                    saveData();
-                    updateAllViews();
-                    resetForm();
-                    showModal('Reset', 'All data has been cleared.', 'success');
-                },
-                () => {}
             );
-        });
+        } else {
+            throw new Error('Invalid format');
+        }
+    } catch (error) {
+        showModal('Error', 'Failed to import file. Please ensure it is a valid JSON backup.', 'error');
+    }
+    // Clear input so same file can be selected again
+    document.getElementById('importFile').value = '';
+};
+reader.readAsText(file);
+});
 
+document.getElementById('resetDataBtn').addEventListener('click', () => {
+if(portfolioData.length === 0) return;
+showModal('Reset All Data', 'Are you ABSOLUTELY sure you want to delete ALL portfolio history? This action cannot be undone.', 'danger',
+    () => {
+        portfolioData = [];
+        saveData();
+        updateAllViews();
+        resetForm();
+        showModal('Reset', 'All data has been cleared.', 'success');
+    },
+    () => {}
+);
+});
 
-        const updateAllViews = () => {
-            updateDashboardSummaries();
-            renderTable();
-            updateCharts();
-        };
+const updateCategoryPerformance = () => {
+const grid = document.getElementById('categoryPerformanceGrid');
+const dateLabel = document.getElementById('categoryPerformanceDateLabel');
 
-        const init = () => {
+if (!grid) return;
+
+grid.innerHTML = '';
+
+if (portfolioData.length < 2) {
+    grid.innerHTML = '<div class="col-span-full text-sm text-slate-500 text-center py-6 bg-slate-50 rounded-lg border border-slate-100 border-dashed">Need at least 2 months of data to analyze month-over-month volatility.</div>';
+    if (portfolioData.length === 1) {
+         dateLabel.textContent = `Only ${formatDateText(portfolioData[0].date)} available`;
+    } else {
+         dateLabel.textContent = 'No data';
+    }
+    return;
+}
+
+const latest = portfolioData[portfolioData.length - 1];
+const previous = portfolioData[portfolioData.length - 2];
+
+dateLabel.textContent = `${formatDateText(latest.date)} vs ${formatDateText(previous.date)}`;
+
+ASSET_CATEGORIES.forEach(cat => {
+    const curVal = parseFloat(latest[cat]) || 0;
+    const prevVal = parseFloat(previous[cat]) || 0;
+    const diff = curVal - prevVal;
+    
+    let pct = 0;
+    if (prevVal > 0) {
+        pct = (diff / prevVal) * 100;
+    } else if (curVal > 0) {
+        pct = 100; // If previously 0, now positive, show as 100% gain indicator
+    }
+
+    let colorClass = 'text-slate-500';
+    let icon = 'fas fa-minus';
+    let sign = '';
+    let bgClass = 'bg-slate-50';
+    let borderClass = 'border-slate-200';
+
+    if (diff > 0) {
+        colorClass = 'text-success';
+        icon = 'fas fa-arrow-trend-up';
+        sign = '+';
+        bgClass = 'bg-green-50/40';
+        borderClass = 'border-green-200';
+    } else if (diff < 0) {
+        colorClass = 'text-danger';
+        icon = 'fas fa-arrow-trend-down';
+        sign = '';
+        bgClass = 'bg-red-50/40';
+        borderClass = 'border-red-200';
+    }
+
+    const itemHTML = `
+        <div class="rounded-xl p-4 border ${borderClass} ${bgClass} flex flex-col justify-between hover:shadow-md transition-all duration-200">
+            <div class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full shadow-sm" style="background-color: ${COLORS[cat]}"></span>
+                ${cat}
+            </div>
+            <div>
+                <div class="text-lg font-bold text-slate-800 font-mono tracking-tight">${formatCurrency(curVal)}</div>
+                <div class="flex items-center gap-1.5 mt-2 ${colorClass}">
+                    <i class="${icon} text-[11px]"></i>
+                    <span class="text-sm font-semibold tracking-tight">${sign}${formatCurrency(diff)}</span>
+                </div>
+                <div class="text-xs opacity-80 mt-1 ${colorClass} font-medium bg-white/50 w-fit px-1.5 py-0.5 rounded">
+                    ${sign}${formatPercent(pct)}
+                </div>
+            </div>
+        </div>
+    `;
+    grid.innerHTML += itemHTML;
+});
+};
+
+const updateAllViews = () => {
+updateDashboardSummaries();
+updateCategoryPerformance();
+renderTable();
+updateCharts();
+};
+
+const init = () => {
             document.getElementById('currentYear').textContent = new Date().getFullYear();
             loadData();
             setupLiveCalculation();
