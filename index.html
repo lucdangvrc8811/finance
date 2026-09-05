@@ -1,447 +1,651 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-  BarChart, Bar, Legend, PieChart, Pie, Cell
-} from 'recharts';
-import { Plus, Edit2, Check, X, TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon, Activity } from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investment Portfolio Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
-// Dữ liệu mẫu ban đầu (Tháng 7 và Tháng 8)
-const initialData = [
-  { id: '1', month: '2023-07', trade: 5000, btcSpot: 12000, copy: 3000, shares: 8000, xaubit: 4000, cash: 10000 },
-  { id: '2', month: '2023-08', trade: 5200, btcSpot: 11500, copy: 3300, shares: 8500, xaubit: 4100, cash: 9000 },
-].map(item => ({
-  ...item,
-  total: item.trade + item.btcSpot + item.copy + item.shares + item.xaubit + item.cash
-}));
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1E40AF',
+                        secondary: '#475569',
+                        accent: '#3B82F6',
+                        background: '#F8FAFC',
+                        card: '#FFFFFF',
+                        success: '#10B981',
+                        danger: '#EF4444',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background min-h-screen text-slate-800 font-sans pb-12">
 
-const CATEGORIES = [
-  { key: 'trade', label: 'Trade', color: '#3b82f6' },      // Blue
-  { key: 'btcSpot', label: 'BTC Spot', color: '#f59e0b' }, // Amber
-  { key: 'copy', label: 'Copy', color: '#10b981' },        // Emerald
-  { key: 'shares', label: 'Shares', color: '#8b5cf6' },    // Violet
-  { key: 'xaubit', label: 'XAUBIT', color: '#ef4444' },    // Red
-  { key: 'cash', label: 'Cash', color: '#64748b' }         // Slate
-];
-
-export default function App() {
-  const [data, setData] = useState(initialData);
-  
-  // State cho form thêm tháng mới
-  const [newEntry, setNewEntry] = useState({
-    month: '', trade: '', btcSpot: '', copy: '', shares: '', xaubit: '', cash: ''
-  });
-
-  // State cho tính năng chỉnh sửa trực tiếp (Inline Editing)
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({});
-
-  // Tính toán dữ liệu phân tích biến động (Tháng hiện tại vs Tháng trước)
-  const performanceAnalysis = useMemo(() => {
-    if (data.length < 2) return null;
-    
-    // Đảm bảo dữ liệu được sắp xếp theo thời gian
-    const sortedData = [...data].sort((a, b) => a.month.localeCompare(b.month));
-    const currentMonth = sortedData[sortedData.length - 1];
-    const previousMonth = sortedData[sortedData.length - 2];
-
-    const analysis = CATEGORIES.map(cat => {
-      const currentVal = currentMonth[cat.key];
-      const prevVal = previousMonth[cat.key];
-      const diff = currentVal - prevVal;
-      const percentChange = prevVal !== 0 ? (diff / prevVal) * 100 : 0;
-      
-      return {
-        ...cat,
-        currentVal,
-        prevVal,
-        diff,
-        percentChange
-      };
-    });
-
-    const totalDiff = currentMonth.total - previousMonth.total;
-    const totalPercentChange = (totalDiff / previousMonth.total) * 100;
-
-    return {
-      currentMonth: currentMonth.month,
-      previousMonth: previousMonth.month,
-      details: analysis,
-      totalDiff,
-      totalPercentChange
-    };
-  }, [data]);
-
-  // Dữ liệu cho biểu đồ tròn (Tháng mới nhất)
-  const latestData = useMemo(() => {
-    if (data.length === 0) return [];
-    const sortedData = [...data].sort((a, b) => a.month.localeCompare(b.month));
-    const latest = sortedData[sortedData.length - 1];
-    return CATEGORIES.map(cat => ({
-      name: cat.label,
-      value: latest[cat.key],
-      color: cat.color
-    })).filter(item => item.value > 0);
-  }, [data]);
-
-  // Format tiền tệ
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
-  };
-
-  // --- Handlers cho Thêm Mới ---
-  const handleNewEntryChange = (e) => {
-    const { name, value } = e.target;
-    setNewEntry(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleAddEntry = (e) => {
-    e.preventDefault();
-    if (!newEntry.month) return alert('Vui lòng chọn tháng!');
-
-    const trade = Number(newEntry.trade) || 0;
-    const btcSpot = Number(newEntry.btcSpot) || 0;
-    const copy = Number(newEntry.copy) || 0;
-    const shares = Number(newEntry.shares) || 0;
-    const xaubit = Number(newEntry.xaubit) || 0;
-    const cash = Number(newEntry.cash) || 0;
-    const total = trade + btcSpot + copy + shares + xaubit + cash;
-
-    const entry = {
-      id: Date.now().toString(),
-      month: newEntry.month,
-      trade, btcSpot, copy, shares, xaubit, cash, total
-    };
-
-    // Kiểm tra xem tháng đã tồn tại chưa
-    const existingIndex = data.findIndex(d => d.month === newEntry.month);
-    if (existingIndex >= 0) {
-      if(window.confirm('Tháng này đã tồn tại. Bạn có muốn ghi đè không?')) {
-        const newData = [...data];
-        newData[existingIndex] = entry;
-        setData(newData);
-      }
-    } else {
-      setData(prev => [...prev, entry].sort((a, b) => a.month.localeCompare(b.month)));
-    }
-
-    setNewEntry({ month: '', trade: '', btcSpot: '', copy: '', shares: '', xaubit: '', cash: '' });
-  };
-
-  // --- Handlers cho Chỉnh Sửa Trực Tiếp ---
-  const startEditing = (entry) => {
-    setEditingId(entry.id);
-    setEditForm({ ...entry });
-  };
-
-  const cancelEditing = () => {
-    setEditingId(null);
-    setEditForm({});
-  };
-
-  const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setEditForm(prev => ({ ...prev, [name]: value }));
-  };
-
-  const saveEdit = () => {
-    const trade = Number(editForm.trade) || 0;
-    const btcSpot = Number(editForm.btcSpot) || 0;
-    const copy = Number(editForm.copy) || 0;
-    const shares = Number(editForm.shares) || 0;
-    const xaubit = Number(editForm.xaubit) || 0;
-    const cash = Number(editForm.cash) || 0;
-    const total = trade + btcSpot + copy + shares + xaubit + cash;
-
-    const updatedData = data.map(item => 
-      item.id === editingId 
-        ? { ...editForm, trade, btcSpot, copy, shares, xaubit, cash, total } 
-        : item
-    );
-
-    // Sắp xếp lại theo tháng đề phòng người dùng đổi tháng
-    updatedData.sort((a, b) => a.month.localeCompare(b.month));
-    
-    setData(updatedData);
-    setEditingId(null);
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-800 font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* Header */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 flex items-center gap-2">
-              <Activity className="text-blue-600" /> Theo Dõi Danh Mục Đầu Tư
-            </h1>
-            <p className="text-slate-500 mt-1">Quản lý và phân tích biến động tài sản hàng tháng</p>
-          </div>
-          {data.length > 0 && (
-            <div className="mt-4 md:mt-0 text-right bg-blue-50 p-4 rounded-xl border border-blue-100">
-              <p className="text-sm text-blue-600 font-medium">Tổng tài sản hiện tại ({latestData.length > 0 ? data[data.length-1].month : ''})</p>
-              <p className="text-3xl font-bold text-blue-700">
-                {formatCurrency(data[data.length - 1]?.total || 0)}
-              </p>
-            </div>
-          )}
-        </header>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Cột trái: Form thêm dữ liệu & Phân tích */}
-          <div className="lg:col-span-1 space-y-6">
-            
-            {/* Cập nhật tháng mới */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-blue-500" /> Cập Nhật Tháng Mới
-              </h2>
-              <form onSubmit={handleAddEntry} className="space-y-4">
+    <!-- Header -->
+    <header class="bg-primary text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white/10 p-2.5 rounded-xl">
+                    <i class="fa-solid fa-chart-pie text-2xl text-accent"></i>
+                </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Chọn Tháng</label>
-                  <input 
-                    type="month" 
-                    name="month"
-                    value={newEntry.month}
-                    onChange={handleNewEntryChange}
-                    className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    required
-                  />
+                    <h1 class="text-xl font-bold tracking-wide">Portfolio Tracker</h1>
+                    <p class="text-xs text-slate-300">Quản lý & Phân tích tài sản đầu tư</p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {CATEGORIES.map(cat => (
-                    <div key={cat.key}>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">{cat.label}</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
-                        <input 
-                          type="number"
-                          name={cat.key}
-                          value={newEntry[cat.key]}
-                          onChange={handleNewEntryChange}
-                          className="w-full pl-7 p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                          placeholder="0"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors flex justify-center items-center gap-2">
-                  <Plus className="w-4 h-4" /> Thêm Dữ Liệu
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <button onclick="exportData()" class="bg-white/10 hover:bg-white/20 text-white px-3.5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 border border-white/10">
+                    <i class="fa-solid fa-download"></i> Export
                 </button>
-              </form>
+                <label class="bg-white/10 hover:bg-white/20 text-white px-3.5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 border border-white/10 cursor-pointer">
+                    <i class="fa-solid fa-upload"></i> Import
+                    <input type="file" id="importFile" accept=".json" class="hidden" onchange="importData(event)">
+                </label>
+                <button onclick="resetData()" class="bg-red-500/20 hover:bg-red-500/30 text-red-200 p-2 rounded-lg text-sm transition border border-red-500/30" title="Khôi phục mặc định">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
             </div>
-
-            {/* Phân Tích Biến Động */}
-            {performanceAnalysis && (
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-emerald-500" /> Phân Tích Biến Động
-                </h2>
-                <p className="text-sm text-slate-500 mb-4">
-                  So sánh {performanceAnalysis.currentMonth} với {performanceAnalysis.previousMonth}
-                </p>
-                
-                <div className="space-y-3">
-                  {/* Tổng quan */}
-                  <div className={`p-3 rounded-lg border ${performanceAnalysis.totalDiff >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="font-semibold text-slate-700">Tổng Danh Mục</span>
-                      <span className={`font-bold flex items-center gap-1 ${performanceAnalysis.totalDiff >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {performanceAnalysis.totalDiff >= 0 ? <TrendingUp className="w-4 h-4"/> : <TrendingDown className="w-4 h-4"/>}
-                        {Math.abs(performanceAnalysis.totalPercentChange).toFixed(2)}%
-                      </span>
-                    </div>
-                    <div className={`text-sm ${performanceAnalysis.totalDiff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                      {performanceAnalysis.totalDiff >= 0 ? '+' : ''}{formatCurrency(performanceAnalysis.totalDiff)}
-                    </div>
-                  </div>
-
-                  {/* Từng danh mục */}
-                  <div className="pt-2">
-                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Chi tiết từng mảng</h3>
-                    {performanceAnalysis.details.map(item => (
-                      <div key={item.key} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></div>
-                          <span className="text-sm font-medium text-slate-700">{item.label}</span>
-                        </div>
-                        <div className="text-right">
-                          <div className={`text-sm font-medium ${item.diff > 0 ? 'text-emerald-600' : item.diff < 0 ? 'text-red-600' : 'text-slate-500'}`}>
-                            {item.diff > 0 ? '+' : ''}{formatCurrency(item.diff)}
-                          </div>
-                          <div className={`text-xs ${item.diff > 0 ? 'text-emerald-500' : item.diff < 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                            {item.diff > 0 ? '+' : ''}{item.percentChange.toFixed(1)}%
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Cột phải: Biểu đồ & Bảng Lịch sử */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* Đồ thị trực quan */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                <PieChartIcon className="w-5 h-5 text-indigo-500" /> Đồ Thị Trực Quan
-              </h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Biểu đồ xu hướng */}
-                <div className="h-64">
-                  <h3 className="text-sm font-medium text-slate-500 text-center mb-2">Xu Hướng Tổng Tài Sản</h3>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data}>
-                      <defs>
-                        <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
-                      <YAxis 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{fontSize: 12, fill: '#64748b'}}
-                        tickFormatter={(value) => `$${value/1000}k`}
-                        width={60}
-                      />
-                      <RechartsTooltip 
-                        formatter={(value) => formatCurrency(value)}
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      />
-                      <Area type="monotone" dataKey="total" name="Tổng tài sản" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Biểu đồ phân bổ */}
-                <div className="h-64">
-                  <h3 className="text-sm font-medium text-slate-500 text-center mb-2">Cơ Cấu Hiện Tại ({latestData.length > 0 ? data[data.length-1].month : ''})</h3>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={latestData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {latestData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip formatter={(value) => formatCurrency(value)} />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }}/>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-
-            {/* Bảng Dữ Liệu Chi Tiết có thể chỉnh sửa */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-slate-500" /> Lịch Sử Dữ Liệu
-                </h2>
-                <p className="text-xs text-slate-400 italic">* Nhấn biểu tượng bút chì để sửa số liệu</p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">Tháng</th>
-                      {CATEGORIES.map(cat => (
-                         <th key={cat.key} className="px-4 py-3 font-medium text-right">{cat.label}</th>
-                      ))}
-                      <th className="px-4 py-3 font-bold text-right text-slate-700">Tổng</th>
-                      <th className="px-4 py-3 font-medium text-center">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.map((row) => {
-                      const isEditing = editingId === row.id;
-
-                      return (
-                        <tr key={row.id} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${isEditing ? 'bg-blue-50/30' : ''}`}>
-                          <td className="px-4 py-3 font-medium text-slate-700 whitespace-nowrap">
-                            {isEditing ? (
-                              <input 
-                                type="month" 
-                                name="month" 
-                                value={editForm.month} 
-                                onChange={handleEditChange}
-                                className="w-32 px-2 py-1 border rounded focus:ring-1 focus:ring-blue-500 outline-none"
-                              />
-                            ) : (
-                              row.month
-                            )}
-                          </td>
-                          
-                          {CATEGORIES.map(cat => (
-                            <td key={cat.key} className="px-4 py-3 text-right tabular-nums text-slate-600">
-                              {isEditing ? (
-                                <input 
-                                  type="number" 
-                                  name={cat.key} 
-                                  value={editForm[cat.key]} 
-                                  onChange={handleEditChange}
-                                  className="w-24 px-2 py-1 border rounded text-right focus:ring-1 focus:ring-blue-500 outline-none"
-                                />
-                              ) : (
-                                formatCurrency(row[cat.key])
-                              )}
-                            </td>
-                          ))}
-                          
-                          <td className="px-4 py-3 text-right font-bold text-blue-700 tabular-nums bg-blue-50/30">
-                            {formatCurrency(row.total)}
-                          </td>
-
-                          <td className="px-4 py-3 text-center">
-                            {isEditing ? (
-                              <div className="flex justify-center gap-2">
-                                <button onClick={saveEdit} className="p-1.5 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors" title="Lưu">
-                                  <Check className="w-4 h-4" />
-                                </button>
-                                <button onClick={cancelEditing} className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors" title="Hủy">
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-                            ) : (
-                              <button onClick={() => startEditing(row)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Chỉnh sửa">
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {data.length === 0 && (
-                      <tr>
-                        <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
-                          Chưa có dữ liệu. Vui lòng cập nhật tháng mới.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            
-          </div>
         </div>
-      </div>
-    </div>
-  );
-}
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 mt-6 space-y-6">
+
+        <!-- Top Overview Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Total Value -->
+            <div class="bg-card p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Portfolio Value</p>
+                    <h3 id="lblTotalValue" class="text-2xl font-bold text-slate-900 mt-1">$0.00</h3>
+                    <p id="lblLatestMonth" class="text-xs text-slate-500 mt-0.5">Latest update</p>
+                </div>
+                <div class="bg-blue-50 text-blue-600 p-3.5 rounded-xl">
+                    <i class="fa-solid fa-wallet text-xl"></i>
+                </div>
+            </div>
+
+            <!-- MoM Change -->
+            <div class="bg-card p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Monthly Change</p>
+                    <h3 id="lblMoMChange" class="text-2xl font-bold mt-1 text-success">+$0.00</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Vs previous month</p>
+                </div>
+                <div id="momIconBg" class="bg-emerald-50 text-success p-3.5 rounded-xl">
+                    <i id="momIcon" class="fa-solid fa-arrow-trend-up text-xl"></i>
+                </div>
+            </div>
+
+            <!-- Top Performer -->
+            <div class="bg-card p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Top Performer (Value)</p>
+                    <h3 id="lblTopAsset" class="text-2xl font-bold text-slate-900 mt-1">-</h3>
+                    <p id="lblTopAssetVal" class="text-xs text-slate-500 mt-0.5">Largest allocation</p>
+                </div>
+                <div class="bg-amber-50 text-amber-600 p-3.5 rounded-xl">
+                    <i class="fa-solid fa-trophy text-xl"></i>
+                </div>
+            </div>
+
+            <!-- Tracked Months -->
+            <div class="bg-card p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Months Tracked</p>
+                    <h3 id="lblTrackedCount" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Total updates recorded</p>
+                </div>
+                <div class="bg-purple-50 text-purple-600 p-3.5 rounded-xl">
+                    <i class="fa-solid fa-calendar-days text-xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="bg-card p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-2 flex flex-col justify-between">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-area text-accent"></i> Xu Hướng Biến Động Tài Sản
+                    </h2>
+                </div>
+                <div class="relative h-72 w-full">
+                    <canvas id="portfolioChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-card p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-accent"></i> Cơ Cấu Tháng Mới Nhất
+                    </h2>
+                </div>
+                <div class="relative h-64 w-full flex justify-center items-center">
+                    <canvas id="allocationChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Performance Analysis Section (Updated with Flexible Month Comparison) -->
+        <div class="bg-card p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-slate-100">
+                <div>
+                    <h2 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                        <i class="fa-solid fa-sliders text-accent"></i> Phân Tích Biến Động Danh Mục (MoM)
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">So sánh sự thay đổi giá trị giữa 2 tháng bất kỳ</p>
+                </div>
+                
+                <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 text-sm">
+                    <span class="text-slate-500 font-medium text-xs">So sánh:</span>
+                    <select id="selectComparePrev" onchange="updateComparison()" class="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                    </select>
+                    <span class="text-slate-400 font-bold">vs</span>
+                    <select id="selectCompareCurr" onchange="updateComparison()" class="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500">
+                    </select>
+                </div>
+            </div>
+
+            <div id="comparisonContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Javascript will inject comparison cards here -->
+            </div>
+        </div>
+
+        <!-- Form & History Data -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Add / Edit Form -->
+            <div class="bg-card p-6 rounded-2xl shadow-sm border border-slate-100 h-fit">
+                <h2 id="formTitle" class="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-plus text-success"></i> Cập Nhật Số Dư Tháng Mới
+                </h2>
+                <form id="portfolioForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+                    <input type="hidden" id="editIndex" value="-1">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Tháng / Năm</label>
+                        <input type="month" id="inputMonth" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-accent">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Trade ($)</label>
+                            <input type="number" id="inputTrade" step="any" placeholder="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-accent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">BTC Spot ($)</label>
+                            <input type="number" id="inputBtcSpot" step="any" placeholder="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-accent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Copy ($)</label>
+                            <input type="number" id="inputCopy" step="any" placeholder="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-accent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Shares ($)</label>
+                            <input type="number" id="inputShares" step="any" placeholder="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-accent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">XAUBIT ($)</label>
+                            <input type="number" id="inputXaubit" step="any" placeholder="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-accent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Cash ($)</label>
+                            <input type="number" id="inputCash" step="any" placeholder="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-accent">
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" id="btnSubmit" class="flex-1 bg-accent hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition text-sm shadow-sm">
+                            Lưu Dữ Liệu
+                        </button>
+                        <button type="button" id="btnCancel" onclick="resetForm()" class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2.5 rounded-xl transition text-sm">
+                            Hủy
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- History Table -->
+            <div class="bg-card p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-2 flex flex-col justify-between">
+                <div>
+                    <h2 class="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-accent"></i> Lịch Sử Số Dư Hàng Tháng
+                    </h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-100 text-slate-400 font-semibold text-xs uppercase">
+                                    <th class="py-3 px-2">Tháng</th>
+                                    <th class="py-3 px-2 text-right">Trade</th>
+                                    <th class="py-3 px-2 text-right">BTC Spot</th>
+                                    <th class="py-3 px-2 text-right">Copy</th>
+                                    <th class="py-3 px-2 text-right">Shares</th>
+                                    <th class="py-3 px-2 text-right">XAUBIT</th>
+                                    <th class="py-3 px-2 text-right">Cash</th>
+                                    <th class="py-3 px-2 text-right font-bold text-slate-600">Tổng</th>
+                                    <th class="py-3 px-2 text-center">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody" class="divide-y divide-slate-50">
+                                <!-- Data rows will be injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Script Logic -->
+    <script>
+        const CATEGORIES = [
+            { key: 'trade', label: 'Trade', color: '#3B82F6' },
+            { key: 'btcSpot', label: 'BTC Spot', color: '#F59E0B' },
+            { key: 'copy', label: 'Copy', color: '#10B981' },
+            { key: 'shares', label: 'Shares', color: '#8B5CF6' },
+            { key: 'xaubit', label: 'XAUBIT', color: '#EF4444' },
+            { key: 'cash', label: 'Cash', color: '#64748B' }
+        ];
+
+        // Mặc định dữ liệu khởi tạo nếu chưa có
+        let portfolioData = JSON.parse(localStorage.getItem('portfolioData')) || [
+            { month: '2026-07', trade: 5000, btcSpot: 12000, copy: 3000, shares: 8000, xaubit: 4000, cash: 3900 },
+            { month: '2026-08', trade: 5500, btcSpot: 11000, copy: 3200, shares: 8500, xaubit: 4200, cash: 4500 }
+        ];
+
+        let portfolioChartInstance = null;
+        let allocationChartInstance = null;
+
+        function formatCurrency(val) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
+        }
+
+        function sortData() {
+            portfolioData.sort((a, b) => a.month.localeCompare(b.month));
+        }
+
+        function saveData() {
+            sortData();
+            localStorage.setItem('portfolioData', JSON.stringify(portfolioData));
+            initApp();
+        }
+
+        function initApp() {
+            renderTable();
+            renderTopCards();
+            renderCharts();
+            populateComparisonSelects();
+            updateComparison();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            if (portfolioData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-400 text-sm">Chưa có dữ liệu nào được ghi nhận.</td></tr>`;
+                return;
+            }
+
+            portfolioData.forEach((item, index) => {
+                const total = CATEGORIES.reduce((sum, cat) => sum + Number(item[cat.key] || 0), 0);
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/80 transition";
+                tr.innerHTML = `
+                    <td class="py-3 px-2 font-semibold text-slate-700">${item.month}</td>
+                    <td class="py-3 px-2 text-right text-slate-600">${formatCurrency(item.trade)}</td>
+                    <td class="py-3 px-2 text-right text-slate-600">${formatCurrency(item.btcSpot)}</td>
+                    <td class="py-3 px-2 text-right text-slate-600">${formatCurrency(item.copy)}</td>
+                    <td class="py-3 px-2 text-right text-slate-600">${formatCurrency(item.shares)}</td>
+                    <td class="py-3 px-2 text-right text-slate-600">${formatCurrency(item.xaubit)}</td>
+                    <td class="py-3 px-2 text-right text-slate-600">${formatCurrency(item.cash)}</td>
+                    <td class="py-3 px-2 text-right font-bold text-primary">${formatCurrency(total)}</td>
+                    <td class="py-3 px-2 text-center">
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="editEntry(${index})" class="p-1.5 text-slate-400 hover:text-accent rounded-lg transition" title="Sửa">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
+                            <button onclick="deleteEntry(${index})" class="p-1.5 text-slate-400 hover:text-danger rounded-lg transition" title="Xóa">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderTopCards() {
+            document.getElementById('lblTrackedCount').innerText = portfolioData.length;
+            if (portfolioData.length === 0) return;
+
+            const latest = portfolioData[portfolioData.length - 1];
+            const latestTotal = CATEGORIES.reduce((sum, cat) => sum + Number(latest[cat.key] || 0), 0);
+
+            document.getElementById('lblTotalValue').innerText = formatCurrency(latestTotal);
+            document.getElementById('lblLatestMonth').innerText = `Tháng ${latest.month}`;
+
+            // Top Performer Category by value
+            let topCat = CATEGORIES[0];
+            let maxVal = Number(latest[topCat.key] || 0);
+            CATEGORIES.forEach(cat => {
+                const val = Number(latest[cat.key] || 0);
+                if (val > maxVal) {
+                    maxVal = val;
+                    topCat = cat;
+                }
+            });
+            document.getElementById('lblTopAsset').innerText = topCat.label;
+            document.getElementById('lblTopAssetVal').innerText = `${formatCurrency(maxVal)} (${((maxVal/latestTotal)*100).toFixed(1)}%)`;
+
+            // MoM Change vs Previous Month
+            if (portfolioData.length >= 2) {
+                const prev = portfolioData[portfolioData.length - 2];
+                const prevTotal = CATEGORIES.reduce((sum, cat) => sum + Number(prev[cat.key] || 0), 0);
+                const diff = latestTotal - prevTotal;
+                const percent = prevTotal > 0 ? (diff / prevTotal) * 100 : 0;
+
+                const lblMoM = document.getElementById('lblMoMChange');
+                const momIcon = document.getElementById('momIcon');
+                const momIconBg = document.getElementById('momIconBg');
+
+                lblMoM.innerText = `${diff >= 0 ? '+' : ''}${formatCurrency(diff)} (${percent.toFixed(2)}%)`;
+                if (diff >= 0) {
+                    lblMoM.className = "text-2xl font-bold mt-1 text-success";
+                    momIcon.className = "fa-solid fa-arrow-trend-up text-xl";
+                    momIconBg.className = "bg-emerald-50 text-success p-3.5 rounded-xl";
+                } else {
+                    lblMoM.className = "text-2xl font-bold mt-1 text-danger";
+                    momIcon.className = "fa-solid fa-arrow-trend-down text-xl";
+                    momIconBg.className = "bg-red-50 text-danger p-3.5 rounded-xl";
+                }
+            } else {
+                document.getElementById('lblMoMChange').innerText = "N/A";
+            }
+        }
+
+        function renderCharts() {
+            const months = portfolioData.map(d => d.month);
+            const totals = portfolioData.map(d => CATEGORIES.reduce((sum, cat) => sum + Number(d[cat.key] || 0), 0));
+
+            // Area Chart - Trend
+            const ctxArea = document.getElementById('portfolioChart').getContext('2d');
+            if (portfolioChartInstance) portfolioChartInstance.destroy();
+            portfolioChartInstance = new Chart(ctxArea, {
+                type: 'line',
+                data: {
+                    labels: months,
+                    datasets: [{
+                        label: 'Tổng Tài Sản',
+                        data: totals,
+                        borderColor: '#3B82F6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { ticks: { callback: (val) => '$' + val / 1000 + 'k' }, grid: { borderDash: [4, 4] } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+
+            // Pie Chart - Allocation Latest Month
+            const ctxPie = document.getElementById('allocationChart').getContext('2d');
+            if (allocationChartInstance) allocationChartInstance.destroy();
+            
+            let latestValues = [];
+            let colors = [];
+            let labels = [];
+            if (portfolioData.length > 0) {
+                const latest = portfolioData[portfolioData.length - 1];
+                CATEGORIES.forEach(cat => {
+                    labels.push(cat.label);
+                    latestValues.push(Number(latest[cat.key] || 0));
+                    colors.push(cat.color);
+                });
+            }
+
+            allocationChartInstance = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: latestValues,
+                        backgroundColor: colors,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+                    },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        // --- Cập nhật danh sách lựa chọn so sánh tháng linh hoạt ---
+        function populateComparisonSelects() {
+            const selectPrev = document.getElementById('selectComparePrev');
+            const selectCurr = document.getElementById('selectCompareCurr');
+            
+            const prevVal = selectPrev.value;
+            const currVal = selectCurr.value;
+
+            selectPrev.innerHTML = '';
+            selectCurr.innerHTML = '';
+
+            portfolioData.forEach((item, index) => {
+                const opt1 = document.createElement('option');
+                opt1.value = item.month;
+                opt1.textContent = item.month;
+                selectPrev.appendChild(opt1);
+
+                const opt2 = document.createElement('option');
+                opt2.value = item.month;
+                opt2.textContent = item.month;
+                selectCurr.appendChild(opt2);
+            });
+
+            if (portfolioData.length >= 2) {
+                selectPrev.value = prevVal || portfolioData[portfolioData.length - 2].month;
+                selectCurr.value = currVal || portfolioData[portfolioData.length - 1].month;
+            } else if (portfolioData.length === 1) {
+                selectPrev.value = portfolioData[0].month;
+                selectCurr.value = portfolioData[0].month;
+            }
+        }
+
+        function updateComparison() {
+            const prevMonthStr = document.getElementById('selectComparePrev').value;
+            const currMonthStr = document.getElementById('selectCompareCurr').value;
+            const container = document.getElementById('comparisonContainer');
+            container.innerHTML = '';
+
+            const prevData = portfolioData.find(d => d.month === prevMonthStr);
+            const currData = portfolioData.find(d => d.month === currMonthStr);
+
+            if (!prevData || !currData) {
+                container.innerHTML = `<p class="col-span-3 text-center text-slate-400 py-4 text-sm">Vui lòng chọn đủ hai tháng để so sánh.</p>`;
+                return;
+            }
+
+            // Tính tổng 2 tháng
+            const prevTotal = CATEGORIES.reduce((sum, cat) => sum + Number(prevData[cat.key] || 0), 0);
+            const currTotal = CATEGORIES.reduce((sum, cat) => sum + Number(currData[cat.key] || 0), 0);
+            const totalDiff = currTotal - prevTotal;
+            const totalPercent = prevTotal > 0 ? (totalDiff / prevTotal) * 100 : 0;
+
+            // Thẻ card tổng quan toàn danh mục
+            let html = `
+                <div class="bg-slate-50 p-4 rounded-xl border ${totalDiff >= 0 ? 'border-emerald-200 bg-emerald-50/40' : 'border-red-200 bg-red-50/40'}">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold text-slate-700 text-sm">Tổng Danh Mục</span>
+                        <span class="text-xs font-bold px-2 py-0.5 rounded-full ${totalDiff >= 0 ? 'bg-emerald-100 text-success' : 'bg-red-100 text-danger'}">
+                            ${totalDiff >= 0 ? '+' : ''}${totalPercent.toFixed(2)}%
+                        </span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-2">${formatCurrency(prevTotal)} → ${formatCurrency(currTotal)}</div>
+                    <div class="text-base font-extrabold ${totalDiff >= 0 ? 'text-success' : 'text-danger'}">
+                        ${totalDiff >= 0 ? '+' : ''}${formatCurrency(totalDiff)}
+                    </div>
+                </div>
+            `;
+
+            // Thẻ card cho từng danh mục con
+            CATEGORIES.forEach(cat => {
+                const pVal = Number(prevData[cat.key] || 0);
+                const cVal = Number(currData[cat.key] || 0);
+                const diff = cVal - pVal;
+                const percent = pVal > 0 ? (diff / pVal) * 100 : (cVal > 0 ? 100 : 0);
+
+                html += `
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+                        <div class="flex justify-between items-center mb-1">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${cat.color}"></span>
+                                <span class="font-semibold text-slate-700 text-sm">${cat.label}</span>
+                            </div>
+                            <span class="text-xs font-bold px-2 py-0.5 rounded-full ${diff >= 0 ? 'bg-emerald-100 text-success' : 'bg-red-100 text-danger'}">
+                                ${diff >= 0 ? '+' : ''}${percent.toFixed(1)}%
+                            </span>
+                        </div>
+                        <div class="text-xs text-slate-500 mb-2">${formatCurrency(pVal)} → ${formatCurrency(cVal)}</div>
+                        <div class="text-sm font-bold ${diff > 0 ? 'text-success' : diff < 0 ? 'text-danger' : 'text-slate-600'}">
+                            ${diff > 0 ? '+' : ''}${formatCurrency(diff)}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // --- Xử lý Thêm / Sửa / Xóa ---
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const editIndex = parseInt(document.getElementById('editIndex').value);
+            const month = document.getElementById('inputMonth').value;
+
+            const newItem = {
+                month: month,
+                trade: parseFloat(document.getElementById('inputTrade').value) || 0,
+                btcSpot: parseFloat(document.getElementById('inputBtcSpot').value) || 0,
+                copy: parseFloat(document.getElementById('inputCopy').value) || 0,
+                shares: parseFloat(document.getElementById('inputShares').value) || 0,
+                xaubit: parseFloat(document.getElementById('inputXaubit').value) || 0,
+                cash: parseFloat(document.getElementById('inputCash').value) || 0
+            };
+
+            if (editIndex === -1) {
+                // Thêm mới hoặc ghi đè nếu trùng tháng
+                const existingIndex = portfolioData.findIndex(d => d.month === month);
+                if (existingIndex >= 0) {
+                    if (!confirm(`Tháng ${month} đã tồn tại. Bạn có muốn cập nhật đè lên không?`)) return;
+                    portfolioData[existingIndex] = newItem;
+                } else {
+                    portfolioData.push(newItem);
+                }
+            } else {
+                portfolioData[editIndex] = newItem;
+            }
+
+            saveData();
+            resetForm();
+        }
+
+        function editEntry(index) {
+            const item = portfolioData[index];
+            document.getElementById('editIndex').value = index;
+            document.getElementById('inputMonth').value = item.month;
+            document.getElementById('inputTrade').value = item.trade;
+            document.getElementById('inputBtcSpot').value = item.btcSpot;
+            document.getElementById('inputCopy').value = item.copy;
+            document.getElementById('inputShares').value = item.shares;
+            document.getElementById('inputXaubit').value = item.xaubit;
+            document.getElementById('inputCash').value = item.cash;
+
+            document.getElementById('formTitle').innerHTML = `<i class="fa-solid fa-pen-to-square text-accent"></i> Chỉnh Sửa Tháng ${item.month}`;
+            document.getElementById('btnSubmit').innerText = "Cập Nhật Thay Đổi";
+            document.getElementById('btnCancel').classList.remove('hidden');
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+
+        function deleteEntry(index) {
+            if (confirm(`Bạn có chắc muốn xóa dữ liệu tháng ${portfolioData[index].month} không?`)) {
+                portfolioData.splice(index, 1);
+                saveData();
+            }
+        }
+
+        function resetForm() {
+            document.getElementById('portfolioForm').reset();
+            document.getElementById('editIndex').value = -1;
+            document.getElementById('formTitle').innerHTML = `<i class="fa-solid fa-circle-plus text-success"></i> Cập Nhật Số Dư Tháng Mới`;
+            document.getElementById('btnSubmit').innerText = "Lưu Dữ Liệu";
+            document.getElementById('btnCancel').classList.add('hidden');
+        }
+
+        function exportData() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(portfolioData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `portfolio_backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (Array.isArray(parsed)) {
+                        portfolioData = parsed;
+                        saveData();
+                        alert("Nhập dữ liệu thành công!");
+                    } else {
+                        alert("File không đúng định dạng!");
+                    }
+                } catch (err) {
+                    alert("Lỗi đọc file JSON!");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function resetData() {
+            if (confirm("Khôi phục lại dữ liệu mẫu ban đầu? Mọi dữ liệu bạn tự nhập sẽ bị xóa.")) {
+                localStorage.removeItem('portfolioData');
+                portfolioData = [
+                    { month: '2026-07', trade: 5000, btcSpot: 12000, copy: 3000, shares: 8000, xaubit: 4000, cash: 3900 },
+                    { month: '2026-08', trade: 5500, btcSpot: 11000, copy: 3200, shares: 8500, xaubit: 4200, cash: 4500 }
+                ];
+                initApp();
+            }
+        }
+
+        // Chạy khởi tạo ứng dụng lúc load xong
+        initApp();
+    </script>
+</body>
+</html>
