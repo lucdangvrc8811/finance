@@ -1,1205 +1,447 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Investment Portfolio Tracker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+  BarChart, Bar, Legend, PieChart, Pie, Cell
+} from 'recharts';
+import { Plus, Edit2, Check, X, TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon, Activity } from 'lucide-react';
+
+// Dữ liệu mẫu ban đầu (Tháng 7 và Tháng 8)
+const initialData = [
+  { id: '1', month: '2023-07', trade: 5000, btcSpot: 12000, copy: 3000, shares: 8000, xaubit: 4000, cash: 10000 },
+  { id: '2', month: '2023-08', trade: 5200, btcSpot: 11500, copy: 3300, shares: 8500, xaubit: 4100, cash: 9000 },
+].map(item => ({
+  ...item,
+  total: item.trade + item.btcSpot + item.copy + item.shares + item.xaubit + item.cash
+}));
+
+const CATEGORIES = [
+  { key: 'trade', label: 'Trade', color: '#3b82f6' },      // Blue
+  { key: 'btcSpot', label: 'BTC Spot', color: '#f59e0b' }, // Amber
+  { key: 'copy', label: 'Copy', color: '#10b981' },        // Emerald
+  { key: 'shares', label: 'Shares', color: '#8b5cf6' },    // Violet
+  { key: 'xaubit', label: 'XAUBIT', color: '#ef4444' },    // Red
+  { key: 'cash', label: 'Cash', color: '#64748b' }         // Slate
+];
+
+export default function App() {
+  const [data, setData] = useState(initialData);
+  
+  // State cho form thêm tháng mới
+  const [newEntry, setNewEntry] = useState({
+    month: '', trade: '', btcSpot: '', copy: '', shares: '', xaubit: '', cash: ''
+  });
+
+  // State cho tính năng chỉnh sửa trực tiếp (Inline Editing)
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+
+  // Tính toán dữ liệu phân tích biến động (Tháng hiện tại vs Tháng trước)
+  const performanceAnalysis = useMemo(() => {
+    if (data.length < 2) return null;
     
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#1E40AF',
-                        secondary: '#475569',
-                        accent: '#3B82F6',
-                        background: '#F8FAFC',
-                        card: '#FFFFFF',
-                        success: '#10B981',
-                        danger: '#EF4444'
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #F8FAFC;
-        }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-        
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1; 
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1; 
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8; 
-        }
-
-        /* Input styling */
-        input[type="number"] {
-            -moz-appearance: textfield;
-        }
-        input[type="number"]::-webkit-outer-spin-button,
-        input[type="number"]::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-    </style>
-</head>
-<body class="text-slate-800 min-h-screen flex flex-col">
-
-    <nav class="bg-primary text-white shadow-md sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16 items-center">
-                <div class="flex items-center gap-2">
-                    <i class="fas fa-chart-pie text-2xl"></i>
-                    <span class="font-bold text-xl tracking-tight">Portfolio Tracker</span>
-                </div>
-                <div class="flex items-center gap-4">
-                    <button id="exportBtn" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 shadow-sm flex items-center gap-2">
-                        <i class="fas fa-download"></i> Export
-                    </button>
-                    <button id="importBtn" class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 shadow-sm flex items-center gap-2" onclick="document.getElementById('importFile').click()">
-                        <i class="fas fa-upload"></i> Import
-                    </button>
-                    <input type="file" id="importFile" class="hidden" accept=".json">
-                    <button id="resetDataBtn" class="text-slate-300 hover:text-white transition-colors duration-200" title="Reset All Data">
-                        <i class="fas fa-trash-alt"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </nav>
-
-    <main class="flex-grow p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full flex flex-col gap-6">
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <!-- Total Value Card -->
-            <div class="glass-panel rounded-2xl p-6 relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i class="fas fa-wallet text-6xl text-primary"></i>
-                </div>
-                <h3 class="text-sm font-medium text-slate-500 mb-1">Total Portfolio Value</h3>
-                <div class="text-3xl font-bold text-slate-800" id="totalValueDisplay">$0.00</div>
-                <p class="text-xs text-slate-400 mt-2">Latest update</p>
-            </div>
-
-            <!-- Monthly Change Card -->
-            <div class="glass-panel rounded-2xl p-6 relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i class="fas fa-chart-line text-6xl" id="monthlyChangeIcon"></i>
-                </div>
-                <h3 class="text-sm font-medium text-slate-500 mb-1">Monthly Change</h3>
-                <div class="flex items-end gap-2">
-                    <div class="text-3xl font-bold" id="monthlyChangeValue">$0.00</div>
-                    <div class="text-sm font-semibold mb-1" id="monthlyChangePercent">0.00%</div>
-                </div>
-                <p class="text-xs text-slate-400 mt-2">Vs previous month</p>
-            </div>
-
-             <!-- Top Performer Card -->
-            <div class="glass-panel rounded-2xl p-6 relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i class="fas fa-trophy text-6xl text-yellow-500"></i>
-                </div>
-                <h3 class="text-sm font-medium text-slate-500 mb-1">Top Performer (Value)</h3>
-                <div class="text-2xl font-bold text-slate-800" id="topPerformerName">-</div>
-                <div class="text-sm font-medium text-slate-600 mt-1" id="topPerformerValue">$0.00</div>
-                <p class="text-xs text-slate-400 mt-1">Largest allocation</p>
-            </div>
-            
-            <!-- Number of Records Card -->
-             <div class="glass-panel rounded-2xl p-6 relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i class="fas fa-calendar-check text-6xl text-purple-500"></i>
-                </div>
-                <h3 class="text-sm font-medium text-slate-500 mb-1">Months Tracked</h3>
-                <div class="text-3xl font-bold text-slate-800" id="monthsTrackedValue">0</div>
-                <p class="text-xs text-slate-400 mt-2">Total updates recorded</p>
-            </div>
-        </div>
-
-        <div class="glass-panel rounded-2xl p-6 shadow-sm">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-semibold text-slate-800">Category Performance (MoM)</h2>
-                <div class="text-sm text-slate-500 bg-slate-100 px-3 py-1 rounded-full font-medium shadow-inner" id="categoryPerformanceDateLabel">Latest vs Previous</div>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" id="categoryPerformanceGrid">
-                <!-- Dynamically populated by JS -->
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            <!-- Growth Chart (Spans 2 columns) -->
-            <div class="glass-panel rounded-2xl p-6 lg:col-span-2 shadow-sm">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-semibold text-slate-800">Portfolio Growth</h2>
-                    <div class="text-sm text-slate-500 bg-slate-100 px-3 py-1 rounded-full" id="growthChartDateRange">No data</div>
-                </div>
-                <div class="w-full h-[300px]">
-                    <canvas id="growthChart"></canvas>
-                </div>
-            </div>
-
-            <!-- Allocation Chart -->
-            <div class="glass-panel rounded-2xl p-6 shadow-sm flex flex-col">
-                <h2 class="text-lg font-semibold text-slate-800 mb-4">Asset Allocation</h2>
-                <div class="flex-grow flex items-center justify-center relative min-h-[250px]">
-                     <canvas id="allocationChart"></canvas>
-                     <div id="allocationEmptyState" class="absolute inset-0 flex items-center justify-center text-slate-400 text-sm hidden">
-                         No data available
-                     </div>
-                </div>
-                <div class="mt-4 text-center text-xs text-slate-500" id="allocationDateLabel">Based on latest entry</div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            
-            <!-- Data Entry Form -->
-            <div class="glass-panel rounded-2xl p-6 shadow-sm xl:col-span-1 flex flex-col h-fit sticky top-20">
-                <h2 class="text-lg font-semibold text-slate-800 mb-4 border-b pb-2">Add New Record</h2>
-                
-                <form id="portfolioForm" class="space-y-4">
-                    
-                    <div>
-                        <label for="monthYear" class="block text-sm font-medium text-slate-700 mb-1">Select Month/Year</label>
-                        <input type="month" id="monthYear" required
-                            class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all">
-                    </div>
-
-                    <div class="space-y-3 pt-2">
-                        <!-- Trade -->
-                        <div class="relative">
-                            <label for="valTrade" class="block text-xs font-semibold text-slate-500 uppercase mb-1">Trade</label>
-                            <div class="relative rounded-md shadow-sm">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span class="text-slate-500 sm:text-sm">$</span>
-                                </div>
-                                <input type="number" step="0.01" id="valTrade" placeholder="0.00" required
-                                    class="w-full pl-7 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all">
-                            </div>
-                        </div>
-
-                        <!-- BTC Spot -->
-                        <div class="relative">
-                            <label for="valBTC" class="block text-xs font-semibold text-slate-500 uppercase mb-1">BTC Spot</label>
-                            <div class="relative rounded-md shadow-sm">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span class="text-slate-500 sm:text-sm">$</span>
-                                </div>
-                                <input type="number" step="0.01" id="valBTC" placeholder="0.00" required
-                                    class="w-full pl-7 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all">
-                            </div>
-                        </div>
-
-                        <!-- Copy -->
-                        <div class="relative">
-                            <label for="valCopy" class="block text-xs font-semibold text-slate-500 uppercase mb-1">Copy</label>
-                            <div class="relative rounded-md shadow-sm">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span class="text-slate-500 sm:text-sm">$</span>
-                                </div>
-                                <input type="number" step="0.01" id="valCopy" placeholder="0.00" required
-                                    class="w-full pl-7 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all">
-                            </div>
-                        </div>
-
-                        <!-- Shares -->
-                        <div class="relative">
-                            <label for="valShares" class="block text-xs font-semibold text-slate-500 uppercase mb-1">Shares</label>
-                            <div class="relative rounded-md shadow-sm">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span class="text-slate-500 sm:text-sm">$</span>
-                                </div>
-                                <input type="number" step="0.01" id="valShares" placeholder="0.00" required
-                                    class="w-full pl-7 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all">
-                            </div>
-                        </div>
-
-                        <!-- XAUBIT -->
-                        <div class="relative">
-                            <label for="valXAUBIT" class="block text-xs font-semibold text-slate-500 uppercase mb-1">XAUBIT</label>
-                            <div class="relative rounded-md shadow-sm">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span class="text-slate-500 sm:text-sm">$</span>
-                                </div>
-                                <input type="number" step="0.01" id="valXAUBIT" placeholder="0.00" required
-                                    class="w-full pl-7 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all">
-                            </div>
-                        </div>
-
-                        <!-- Cash -->
-                        <div class="relative">
-                            <label for="valCash" class="block text-xs font-semibold text-slate-500 uppercase mb-1">Cash</label>
-                            <div class="relative rounded-md shadow-sm">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span class="text-slate-500 sm:text-sm">$</span>
-                                </div>
-                                <input type="number" step="0.01" id="valCash" placeholder="0.00" required
-                                    class="w-full pl-7 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="pt-4 border-t mt-4 flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
-                        <span class="text-sm font-semibold text-slate-600">Total Calculation:</span>
-                        <span class="font-bold text-lg text-primary" id="formTotalPreview">$0.00</span>
-                    </div>
-
-                    <button type="submit" class="w-full bg-primary hover:bg-blue-800 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition-all duration-200 flex justify-center items-center gap-2">
-                        <i class="fas fa-save"></i> Save Record
-                    </button>
-                    <!-- Hidden field to track if we are editing -->
-                    <input type="hidden" id="editId" value="">
-                </form>
-            </div>
-
-            <!-- History Data Table -->
-            <div class="glass-panel rounded-2xl p-0 shadow-sm xl:col-span-2 overflow-hidden flex flex-col h-full min-h-[500px]">
-                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
-                    <h2 class="text-lg font-semibold text-slate-800">History Log</h2>
-                    <div class="text-sm text-slate-500" id="recordCountText">0 records</div>
-                </div>
-                
-                <div class="overflow-x-auto flex-grow bg-white">
-                    <table class="w-full text-sm text-left">
-                        <thead class="text-xs text-slate-500 uppercase bg-slate-50 sticky top-0">
-                            <tr>
-                                <th scope="col" class="px-6 py-4 font-semibold">Month</th>
-                                <th scope="col" class="px-4 py-4 font-semibold text-right">Trade</th>
-                                <th scope="col" class="px-4 py-4 font-semibold text-right">BTC Spot</th>
-                                <th scope="col" class="px-4 py-4 font-semibold text-right">Copy</th>
-                                <th scope="col" class="px-4 py-4 font-semibold text-right">Shares</th>
-                                <th scope="col" class="px-4 py-4 font-semibold text-right">XAUBIT</th>
-                                <th scope="col" class="px-4 py-4 font-semibold text-right">Cash</th>
-                                <th scope="col" class="px-6 py-4 font-bold text-right text-slate-800">Total</th>
-                                <th scope="col" class="px-6 py-4 font-semibold text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="dataTableBody" class="divide-y divide-slate-100">
-                            <!-- Rows will be populated by JS -->
-                        </tbody>
-                    </table>
-                    
-                    <!-- Empty State for Table -->
-                    <div id="tableEmptyState" class="flex flex-col items-center justify-center p-12 text-slate-400">
-                        <i class="fas fa-folder-open text-4xl mb-3 opacity-50"></i>
-                        <p>No portfolio records found.</p>
-                        <p class="text-xs mt-1">Add your first record using the form.</p>
-                    </div>
-                </div>
-            </div>
-            
-        </div>
-    </main>
-
-    <footer class="bg-white border-t border-slate-200 mt-auto">
-        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 text-center text-sm text-slate-500">
-            Portfolio Tracker &copy; <span id="currentYear"></span>. Built for tracking personal investments.
-        </div>
-    </footer>
-
-    <div id="customModal" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-[100] hidden flex items-center justify-center backdrop-blur-sm transition-opacity duration-300 opacity-0">
-        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 transform scale-95 transition-transform duration-300" id="modalContent">
-            <div class="text-center mb-6">
-                <div id="modalIcon" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4">
-                    <!-- Icon injected via JS -->
-                </div>
-                <h3 class="text-lg leading-6 font-medium text-slate-900" id="modalTitle">Modal Title</h3>
-                <div class="mt-2">
-                    <p class="text-sm text-slate-500" id="modalMessage">Modal message goes here.</p>
-                </div>
-            </div>
-            <div class="flex gap-3 justify-center w-full" id="modalButtons">
-                <!-- Buttons injected via JS -->
-            </div>
-        </div>
-    </div>
-
-
-    <script>
-        // Constants & Config
-        const STORAGE_KEY = 'portfolio_tracker_data';
-        const ASSET_CATEGORIES = ['Trade', 'BTC Spot', 'Copy', 'Shares', 'XAUBIT', 'Cash'];
-        
-        // Color Palette for Charts
-        const COLORS = {
-            'Trade': '#3B82F6',     // Blue
-            'BTC Spot': '#F59E0B',  // Amber
-            'Copy': '#8B5CF6',      // Purple
-            'Shares': '#10B981',    // Emerald
-            'XAUBIT': '#EAB308',    // Yellow
-            'Cash': '#64748B'       // Slate
-        };
-
-        // State Management
-        let portfolioData = [];
-        let growthChartInstance = null;
-        let allocationChartInstance = null;
-        
-        // DOM Elements
-        const form = document.getElementById('portfolioForm');
-        const dataTableBody = document.getElementById('dataTableBody');
-        const tableEmptyState = document.getElementById('tableEmptyState');
-        const editIdInput = document.getElementById('editId');
-        
-        // Form inputs
-        const monthYearInput = document.getElementById('monthYear');
-        const inputs = {
-            'Trade': document.getElementById('valTrade'),
-            'BTC Spot': document.getElementById('valBTC'),
-            'Copy': document.getElementById('valCopy'),
-            'Shares': document.getElementById('valShares'),
-            'XAUBIT': document.getElementById('valXAUBIT'),
-            'Cash': document.getElementById('valCash')
-        };
-        const formTotalPreview = document.getElementById('formTotalPreview');
-
-        
-        // Format currency
-        const formatCurrency = (value) => {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD',
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }).format(value);
-        };
-
-        // Format percentage
-        const formatPercent = (value) => {
-            return new Intl.NumberFormat('en-US', {
-                style: 'percent',
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }).format(value / 100);
-        };
-
-        // Format Date (YYYY-MM to "Month YYYY")
-        const formatDateText = (dateString) => {
-            const [year, month] = dateString.split('-');
-            const date = new Date(year, month - 1);
-            return date.toLocaleString('default', { month: 'short', year: 'numeric' });
-        };
-
-        // Generate ID based on date (YYYY-MM)
-        const generateId = (dateString) => dateString;
-
-        // Calculate total for a record
-        const calculateTotal = (record) => {
-            return ASSET_CATEGORIES.reduce((sum, cat) => sum + (parseFloat(record[cat]) || 0), 0);
-        };
-
-        
-        const loadData = () => {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-                try {
-                    portfolioData = JSON.parse(stored);
-                    // Sort chronologically
-                    portfolioData.sort((a, b) => a.date.localeCompare(b.date));
-                } catch (e) {
-                    console.error("Error parsing stored data", e);
-                    portfolioData = [];
-                }
-            } else {
-                // Initialize with an example or empty
-                portfolioData = [];
-            }
-        };
-
-        const saveData = () => {
-            // Sort before saving just in case
-            portfolioData.sort((a, b) => a.date.localeCompare(b.date));
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(portfolioData));
-        };
-
-
-        const updateDashboardSummaries = () => {
-            if (portfolioData.length === 0) {
-                document.getElementById('totalValueDisplay').textContent = '$0.00';
-                document.getElementById('monthlyChangeValue').textContent = '$0.00';
-                document.getElementById('monthlyChangePercent').textContent = '0.00%';
-                document.getElementById('monthlyChangePercent').className = 'text-sm font-semibold mb-1 text-slate-500';
-                document.getElementById('monthlyChangeIcon').className = 'fas fa-minus text-6xl text-slate-300';
-                
-                document.getElementById('topPerformerName').textContent = '-';
-                document.getElementById('topPerformerValue').textContent = '$0.00';
-                document.getElementById('monthsTrackedValue').textContent = '0';
-                return;
-            }
-
-            // Get latest record
-            const latest = portfolioData[portfolioData.length - 1];
-            const latestTotal = calculateTotal(latest);
-            
-            // Total Value
-            document.getElementById('totalValueDisplay').textContent = formatCurrency(latestTotal);
-            
-            // Monthly Change
-            if (portfolioData.length > 1) {
-                const previous = portfolioData[portfolioData.length - 2];
-                const previousTotal = calculateTotal(previous);
-                const diff = latestTotal - previousTotal;
-                const pctChange = previousTotal > 0 ? (diff / previousTotal) * 100 : 0;
-                
-                const changeValEl = document.getElementById('monthlyChangeValue');
-                const changePctEl = document.getElementById('monthlyChangePercent');
-                const changeIcon = document.getElementById('monthlyChangeIcon');
-
-                changeValEl.textContent = formatCurrency(Math.abs(diff));
-                changePctEl.textContent = formatPercent(Math.abs(pctChange));
-
-                if (diff > 0) {
-                    changeValEl.className = 'text-3xl font-bold text-success';
-                    changePctEl.className = 'text-sm font-semibold mb-1 text-success';
-                    changeIcon.className = 'fas fa-arrow-trend-up text-6xl text-success';
-                    changeValEl.prepend('+');
-                    changePctEl.prepend('+');
-                } else if (diff < 0) {
-                    changeValEl.className = 'text-3xl font-bold text-danger';
-                    changePctEl.className = 'text-sm font-semibold mb-1 text-danger';
-                    changeIcon.className = 'fas fa-arrow-trend-down text-6xl text-danger';
-                    changeValEl.prepend('-');
-                    changePctEl.prepend('-');
-                } else {
-                    changeValEl.className = 'text-3xl font-bold text-slate-600';
-                    changePctEl.className = 'text-sm font-semibold mb-1 text-slate-500';
-                    changeIcon.className = 'fas fa-minus text-6xl text-slate-300';
-                }
-            } else {
-                document.getElementById('monthlyChangeValue').textContent = 'N/A';
-                document.getElementById('monthlyChangePercent').textContent = '';
-                document.getElementById('monthlyChangeValue').className = 'text-xl font-medium text-slate-500';
-            }
-
-            // Top Performer (Largest Allocation in latest month)
-            let topAsset = '';
-            let topValue = -1;
-            ASSET_CATEGORIES.forEach(cat => {
-                const val = parseFloat(latest[cat]) || 0;
-                if (val > topValue) {
-                    topValue = val;
-                    topAsset = cat;
-                }
-            });
-            document.getElementById('topPerformerName').textContent = topAsset;
-            document.getElementById('topPerformerValue').textContent = formatCurrency(topValue);
-            
-            // Months Tracked
-            document.getElementById('monthsTrackedValue').textContent = portfolioData.length;
-        };
-
-        const renderTable = () => {
-            dataTableBody.innerHTML = '';
-            
-            if (portfolioData.length === 0) {
-                tableEmptyState.classList.remove('hidden');
-                document.getElementById('recordCountText').textContent = '0 records';
-                return;
-            }
-            
-            tableEmptyState.classList.add('hidden');
-            document.getElementById('recordCountText').textContent = `${portfolioData.length} record${portfolioData.length > 1 ? 's' : ''}`;
-            
-            // Render in reverse chronological order for the table
-            const reversedData = [...portfolioData].reverse();
-
-            reversedData.forEach(record => {
-                const tr = document.createElement('tr');
-                tr.className = 'hover:bg-slate-50 transition-colors group';
-                
-                const total = calculateTotal(record);
-
-                let html = `
-                    <td class="px-6 py-4 whitespace-nowrap font-medium text-slate-900">
-                        ${formatDateText(record.date)}
-                    </td>
-                `;
-
-                ASSET_CATEGORIES.forEach(cat => {
-                    const val = parseFloat(record[cat]) || 0;
-                    // Muted color if 0
-                    const colorClass = val === 0 ? 'text-slate-300' : 'text-slate-700';
-                    html += `<td class="px-4 py-4 whitespace-nowrap text-right ${colorClass} font-mono text-sm">${formatCurrency(val)}</td>`;
-                });
-
-                html += `
-                    <td class="px-6 py-4 whitespace-nowrap text-right font-bold text-primary font-mono bg-blue-50/30">
-                        ${formatCurrency(total)}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center">
-                        <div class="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onclick="editRecord('${record.date}')" class="text-blue-500 hover:text-blue-700 p-1 bg-blue-100 rounded" title="Edit">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button onclick="confirmDelete('${record.date}')" class="text-red-500 hover:text-red-700 p-1 bg-red-100 rounded" title="Delete">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </td>
-                `;
-                tr.innerHTML = html;
-                dataTableBody.appendChild(tr);
-            });
-        };
-
-
-        const updateCharts = () => {
-            updateGrowthChart();
-            updateAllocationChart();
-        };
-
-        const updateGrowthChart = () => {
-            const ctx = document.getElementById('growthChart').getContext('2d');
-            
-            if (portfolioData.length === 0) {
-                if (growthChartInstance) growthChartInstance.destroy();
-                document.getElementById('growthChartDateRange').textContent = 'No data';
-                return;
-            }
-
-            const labels = portfolioData.map(d => formatDateText(d.date));
-            const datasets = [];
-            
-            // Dataset for Total Value
-            const totals = portfolioData.map(d => calculateTotal(d));
-            
-            // Set date range label
-            if (labels.length > 1) {
-                document.getElementById('growthChartDateRange').textContent = `${labels[0]} - ${labels[labels.length-1]}`;
-            } else {
-                document.getElementById('growthChartDateRange').textContent = labels[0];
-            }
-
-            // Add stacked areas for each category
-            ASSET_CATEGORIES.forEach(cat => {
-                datasets.push({
-                    label: cat,
-                    data: portfolioData.map(d => parseFloat(d[cat]) || 0),
-                    backgroundColor: COLORS[cat] + '80', // Add transparency
-                    borderColor: COLORS[cat],
-                    borderWidth: 1,
-                    fill: true,
-                    tension: 0.4
-                });
-            });
-
-            // Add line for Total (Overlay)
-            datasets.push({
-                label: 'Total Value',
-                data: totals,
-                type: 'line',
-                borderColor: '#1E40AF',
-                backgroundColor: '#1E40AF',
-                borderWidth: 3,
-                pointBackgroundColor: '#FFFFFF',
-                pointBorderColor: '#1E40AF',
-                pointBorderWidth: 2,
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                fill: false,
-                tension: 0.4,
-                yAxisID: 'y'
-            });
-
-            if (growthChartInstance) {
-                growthChartInstance.destroy();
-            }
-
-            // Common Chart.js options for aesthetics
-            Chart.defaults.font.family = "'Inter', sans-serif";
-            Chart.defaults.color = '#64748B';
-
-            growthChartInstance = new Chart(ctx, {
-                type: 'bar', // Base type, overridden by 'line' for total
-                data: {
-                    labels: labels,
-                    datasets: datasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 20
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                            titleColor: '#1E293B',
-                            bodyColor: '#475569',
-                            borderColor: '#E2E8F0',
-                            borderWidth: 1,
-                            padding: 12,
-                            boxPadding: 6,
-                            usePointStyle: true,
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.parsed.y !== null) {
-                                        label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
-                                    }
-                                    return label;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            stacked: true,
-                            grid: {
-                                display: false
-                            }
-                        },
-                        y: {
-                            stacked: true,
-                            beginAtZero: true,
-                            grid: {
-                                color: '#F1F5F9'
-                            },
-                            ticks: {
-                                callback: function(value) {
-                                    if(value >= 1000) {
-                                        return '$' + value/1000 + 'k';
-                                    }
-                                    return '$' + value;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        };
-
-        const updateAllocationChart = () => {
-            const ctx = document.getElementById('allocationChart').getContext('2d');
-            const emptyState = document.getElementById('allocationEmptyState');
-            const dateLabel = document.getElementById('allocationDateLabel');
-            
-            if (portfolioData.length === 0) {
-                if (allocationChartInstance) allocationChartInstance.destroy();
-                emptyState.classList.remove('hidden');
-                dateLabel.textContent = '';
-                return;
-            }
-
-            emptyState.classList.add('hidden');
-            const latest = portfolioData[portfolioData.length - 1];
-            dateLabel.textContent = `Based on ${formatDateText(latest.date)} entry`;
-
-            const data = ASSET_CATEGORIES.map(cat => parseFloat(latest[cat]) || 0);
-            const backgroundColors = ASSET_CATEGORIES.map(cat => COLORS[cat]);
-
-            // Check if all values are 0
-            if (data.every(val => val === 0)) {
-                 if (allocationChartInstance) allocationChartInstance.destroy();
-                 emptyState.classList.remove('hidden');
-                 emptyState.textContent = 'All asset values are zero';
-                 return;
-            }
-
-            if (allocationChartInstance) {
-                allocationChartInstance.destroy();
-            }
-
-            allocationChartInstance = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ASSET_CATEGORIES,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: backgroundColors,
-                        borderWidth: 0,
-                        hoverOffset: 10
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '70%',
-                    plugins: {
-                        legend: {
-                            position: 'right',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 15,
-                                font: {
-                                    size: 11
-                                }
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                            titleColor: '#1E293B',
-                            bodyColor: '#475569',
-                            borderColor: '#E2E8F0',
-                            borderWidth: 1,
-                            padding: 10,
-                            callbacks: {
-                                label: function(context) {
-                                    const value = context.raw;
-                                    const total = context.chart._metasets[context.datasetIndex].total;
-                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                                    return ` ${context.label}: ${formatCurrency(value)} (${percentage}%)`;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        };
-
-
-        // Live preview of total in form
-        const setupLiveCalculation = () => {
-            const calculatePreview = () => {
-                let sum = 0;
-                ASSET_CATEGORIES.forEach(cat => {
-                    const val = parseFloat(inputs[cat].value) || 0;
-                    sum += val;
-                });
-                formTotalPreview.textContent = formatCurrency(sum);
-            };
-
-            ASSET_CATEGORIES.forEach(cat => {
-                inputs[cat].addEventListener('input', calculatePreview);
-            });
-        };
-
-        form.addEventListener('submit', (e) => {
-            e.preventDefault();
-
-            const dateVal = monthYearInput.value; // Format: "YYYY-MM"
-            if (!dateVal) {
-                showModal('Error', 'Please select a valid Month/Year.', 'error');
-                return;
-            }
-
-            const newRecord = {
-                date: dateVal,
-                id: generateId(dateVal)
-            };
-
-            // Collect values
-            let hasPositiveValue = false;
-            ASSET_CATEGORIES.forEach(cat => {
-                const val = parseFloat(inputs[cat].value) || 0;
-                if(val < 0) {
-                     showModal('Error', `${cat} cannot have a negative value.`, 'error');
-                     return; // Note: this only returns from forEach callback, not submit handler. Handled below.
-                }
-                if (val > 0) hasPositiveValue = true;
-                newRecord[cat] = val;
-            });
-
-            // Validate no negatives
-            if(ASSET_CATEGORIES.some(cat => (parseFloat(inputs[cat].value) || 0) < 0)){
-                return; // Stop submission
-            }
-
-
-            const isEditing = editIdInput.value !== '';
-            const existingIndex = portfolioData.findIndex(d => d.date === dateVal);
-
-            if (isEditing) {
-                // If editing, and date changed, check if new date conflicts
-                if (editIdInput.value !== dateVal && existingIndex !== -1) {
-                     showModal('Conflict', `A record for ${formatDateText(dateVal)} already exists. Overwrite?`, 'warning', 
-                        () => saveRecord(newRecord, existingIndex),
-                        () => {} // Cancel
-                    );
-                    return;
-                }
-                
-                // Update existing
-                const targetIndex = existingIndex !== -1 ? existingIndex : portfolioData.findIndex(d => d.date === editIdInput.value);
-                saveRecord(newRecord, targetIndex);
-                showModal('Success', 'Record updated successfully.', 'success');
-
-            } else {
-                // New record
-                if (existingIndex !== -1) {
-                    showModal('Conflict', `A record for ${formatDateText(dateVal)} already exists. Do you want to update it?`, 'warning',
-                        () => saveRecord(newRecord, existingIndex),
-                        () => {}
-                    );
-                    return;
-                }
-                saveRecord(newRecord, -1);
-                showModal('Success', 'New record added successfully.', 'success');
-            }
-        });
-
-        const saveRecord = (record, index) => {
-            if (index >= 0) {
-                portfolioData[index] = record;
-            } else {
-                portfolioData.push(record);
-            }
-            
-            saveData();
-            updateAllViews();
-            resetForm();
-        };
-
-        const editRecord = (dateString) => {
-            const record = portfolioData.find(d => d.date === dateString);
-            if (!record) return;
-
-            monthYearInput.value = record.date;
-            ASSET_CATEGORIES.forEach(cat => {
-                inputs[cat].value = record[cat] === 0 ? '' : record[cat]; // Show blank for 0 for easier editing
-            });
-            editIdInput.value = record.date;
-
-            // Trigger input event to update preview
-            inputs['Trade'].dispatchEvent(new Event('input'));
-
-            // Scroll to form
-            form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            
-            // Change button text
-            const btn = form.querySelector('button[type="submit"]');
-            btn.innerHTML = '<i class="fas fa-check-circle"></i> Update Record';
-            btn.classList.remove('bg-primary');
-            btn.classList.add('bg-success', 'hover:bg-green-600');
-        };
-
-        const resetForm = () => {
-            form.reset();
-            editIdInput.value = '';
-            
-            // If it's the first record ever, or we just saved, set month input to current month or next logical month
-            if(portfolioData.length > 0) {
-                 // Try to set to next month based on latest entry if adding new
-                 const latestDate = portfolioData[portfolioData.length - 1].date;
-                 let [year, month] = latestDate.split('-');
-                 let dateObj = new Date(year, parseInt(month)); // This advances to next month because JS months are 0-indexed but we pass 1-indexed string value. (e.g., passing '07' creates Aug)
-                 
-                 const nextMonthStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-                 monthYearInput.value = nextMonthStr;
-            } else {
-                 // Default to current month
-                 const now = new Date();
-                 monthYearInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            }
-           
-            formTotalPreview.textContent = '$0.00';
-
-            const btn = form.querySelector('button[type="submit"]');
-            btn.innerHTML = '<i class="fas fa-save"></i> Save Record';
-            btn.classList.add('bg-primary', 'hover:bg-blue-800');
-            btn.classList.remove('bg-success', 'hover:bg-green-600');
-        };
-
-        const deleteRecord = (dateString) => {
-            portfolioData = portfolioData.filter(d => d.date !== dateString);
-            saveData();
-            updateAllViews();
-            if(editIdInput.value === dateString) {
-                resetForm();
-            }
-            showModal('Deleted', `Record for ${formatDateText(dateString)} removed.`, 'success');
-        };
-
-        const confirmDelete = (dateString) => {
-            showModal('Confirm Deletion', `Are you sure you want to delete the record for ${formatDateText(dateString)}? This cannot be undone.`, 'danger',
-                () => deleteRecord(dateString),
-                () => {} // cancel
-            );
-        };
-
-        const modal = document.getElementById('customModal');
-        const modalContent = document.getElementById('modalContent');
-        const modalTitle = document.getElementById('modalTitle');
-        const modalMessage = document.getElementById('modalMessage');
-        const modalIcon = document.getElementById('modalIcon');
-        const modalButtons = document.getElementById('modalButtons');
-
-        const showModal = (title, message, type = 'info', onConfirm = null, onCancel = null) => {
-            modalTitle.textContent = title;
-            modalMessage.textContent = message;
-            modalButtons.innerHTML = ''; // Clear existing
-            
-            // Configure appearance based on type
-            let iconHtml = '';
-            let bgClass = '';
-            let textClass = '';
-
-            switch(type) {
-                case 'success':
-                    iconHtml = '<i class="fas fa-check text-xl"></i>';
-                    bgClass = 'bg-green-100';
-                    textClass = 'text-green-600';
-                    break;
-                case 'danger':
-                case 'error':
-                    iconHtml = '<i class="fas fa-exclamation-triangle text-xl"></i>';
-                    bgClass = 'bg-red-100';
-                    textClass = 'text-red-600';
-                    break;
-                case 'warning':
-                    iconHtml = '<i class="fas fa-info text-xl"></i>';
-                    bgClass = 'bg-yellow-100';
-                    textClass = 'text-yellow-600';
-                    break;
-                default:
-                    iconHtml = '<i class="fas fa-info text-xl"></i>';
-                    bgClass = 'bg-blue-100';
-                    textClass = 'text-blue-600';
-            }
-
-            modalIcon.className = `mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4 ${bgClass} ${textClass}`;
-            modalIcon.innerHTML = iconHtml;
-
-            const hideModal = () => {
-                modal.classList.remove('opacity-100');
-                modalContent.classList.remove('scale-100');
-                modal.classList.add('opacity-0');
-                modalContent.classList.add('scale-95');
-                setTimeout(() => modal.classList.add('hidden'), 300);
-            };
-
-            // Setup buttons
-            if (onConfirm && onCancel) {
-                // It's a confirm dialog
-                const cancelBtn = document.createElement('button');
-                cancelBtn.className = 'mt-3 w-full inline-flex justify-center rounded-md border border-slate-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-slate-700 hover:bg-slate-50 focus:outline-none sm:mt-0 sm:col-start-1 sm:text-sm transition-colors';
-                cancelBtn.textContent = 'Cancel';
-                cancelBtn.onclick = () => { hideModal(); onCancel(); };
-
-                const confirmBtn = document.createElement('button');
-                const btnColor = type === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-blue-700';
-                confirmBtn.className = `w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 ${btnColor} text-base font-medium text-white focus:outline-none sm:col-start-2 sm:text-sm transition-colors`;
-                confirmBtn.textContent = type === 'danger' ? 'Delete' : 'Confirm';
-                confirmBtn.onclick = () => { hideModal(); onConfirm(); };
-
-                modalButtons.appendChild(cancelBtn);
-                modalButtons.appendChild(confirmBtn);
-            } else {
-                // It's an alert dialog
-                const okBtn = document.createElement('button');
-                okBtn.className = 'w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:text-sm transition-colors';
-                okBtn.textContent = 'OK';
-                okBtn.onclick = hideModal;
-                modalButtons.appendChild(okBtn);
-            }
-
-            // Show modal
-            modal.classList.remove('hidden');
-            // Trigger reflow
-            void modal.offsetWidth;
-            modal.classList.remove('opacity-0');
-            modalContent.classList.remove('scale-95');
-            modal.classList.add('opacity-100');
-            modalContent.classList.add('scale-100');
-        };
-
-
-
-        document.getElementById('exportBtn').addEventListener('click', () => {
-            if (portfolioData.length === 0) {
-                showModal('Export Failed', 'No data available to export.', 'warning');
-                return;
-            }
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(portfolioData));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href",     dataStr);
-            downloadAnchorNode.setAttribute("download", "portfolio_backup.json");
-            document.body.appendChild(downloadAnchorNode); // required for firefox
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
-        });
-
-        document.getElementById('importFile').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const contents = JSON.parse(e.target.result);
-                    // Basic validation
-                    if (Array.isArray(contents) && (contents.length === 0 || (contents[0].date && typeof contents[0].Trade !== 'undefined'))) {
-                        
-                        showModal('Confirm Import', 'Importing data will overwrite your current portfolio. Proceed?', 'warning',
-                            () => {
-                    // Clear input on cancel
-                    document.getElementById('importFile').value = '';
-                }
-            );
-        } else {
-            throw new Error('Invalid format');
-        }
-    } catch (error) {
-        showModal('Error', 'Failed to import file. Please ensure it is a valid JSON backup.', 'error');
-    }
-    // Clear input so same file can be selected again
-    document.getElementById('importFile').value = '';
-};
-reader.readAsText(file);
-});
-
-document.getElementById('resetDataBtn').addEventListener('click', () => {
-if(portfolioData.length === 0) return;
-showModal('Reset All Data', 'Are you ABSOLUTELY sure you want to delete ALL portfolio history? This action cannot be undone.', 'danger',
-    () => {
-        portfolioData = [];
-        saveData();
-        updateAllViews();
-        resetForm();
-        showModal('Reset', 'All data has been cleared.', 'success');
-    },
-    () => {}
-);
-});
-
-const updateCategoryPerformance = () => {
-const grid = document.getElementById('categoryPerformanceGrid');
-const dateLabel = document.getElementById('categoryPerformanceDateLabel');
-
-if (!grid) return;
-
-grid.innerHTML = '';
-
-if (portfolioData.length < 2) {
-    grid.innerHTML = '<div class="col-span-full text-sm text-slate-500 text-center py-6 bg-slate-50 rounded-lg border border-slate-100 border-dashed">Need at least 2 months of data to analyze month-over-month volatility.</div>';
-    if (portfolioData.length === 1) {
-         dateLabel.textContent = `Only ${formatDateText(portfolioData[0].date)} available`;
+    // Đảm bảo dữ liệu được sắp xếp theo thời gian
+    const sortedData = [...data].sort((a, b) => a.month.localeCompare(b.month));
+    const currentMonth = sortedData[sortedData.length - 1];
+    const previousMonth = sortedData[sortedData.length - 2];
+
+    const analysis = CATEGORIES.map(cat => {
+      const currentVal = currentMonth[cat.key];
+      const prevVal = previousMonth[cat.key];
+      const diff = currentVal - prevVal;
+      const percentChange = prevVal !== 0 ? (diff / prevVal) * 100 : 0;
+      
+      return {
+        ...cat,
+        currentVal,
+        prevVal,
+        diff,
+        percentChange
+      };
+    });
+
+    const totalDiff = currentMonth.total - previousMonth.total;
+    const totalPercentChange = (totalDiff / previousMonth.total) * 100;
+
+    return {
+      currentMonth: currentMonth.month,
+      previousMonth: previousMonth.month,
+      details: analysis,
+      totalDiff,
+      totalPercentChange
+    };
+  }, [data]);
+
+  // Dữ liệu cho biểu đồ tròn (Tháng mới nhất)
+  const latestData = useMemo(() => {
+    if (data.length === 0) return [];
+    const sortedData = [...data].sort((a, b) => a.month.localeCompare(b.month));
+    const latest = sortedData[sortedData.length - 1];
+    return CATEGORIES.map(cat => ({
+      name: cat.label,
+      value: latest[cat.key],
+      color: cat.color
+    })).filter(item => item.value > 0);
+  }, [data]);
+
+  // Format tiền tệ
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+  };
+
+  // --- Handlers cho Thêm Mới ---
+  const handleNewEntryChange = (e) => {
+    const { name, value } = e.target;
+    setNewEntry(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddEntry = (e) => {
+    e.preventDefault();
+    if (!newEntry.month) return alert('Vui lòng chọn tháng!');
+
+    const trade = Number(newEntry.trade) || 0;
+    const btcSpot = Number(newEntry.btcSpot) || 0;
+    const copy = Number(newEntry.copy) || 0;
+    const shares = Number(newEntry.shares) || 0;
+    const xaubit = Number(newEntry.xaubit) || 0;
+    const cash = Number(newEntry.cash) || 0;
+    const total = trade + btcSpot + copy + shares + xaubit + cash;
+
+    const entry = {
+      id: Date.now().toString(),
+      month: newEntry.month,
+      trade, btcSpot, copy, shares, xaubit, cash, total
+    };
+
+    // Kiểm tra xem tháng đã tồn tại chưa
+    const existingIndex = data.findIndex(d => d.month === newEntry.month);
+    if (existingIndex >= 0) {
+      if(window.confirm('Tháng này đã tồn tại. Bạn có muốn ghi đè không?')) {
+        const newData = [...data];
+        newData[existingIndex] = entry;
+        setData(newData);
+      }
     } else {
-         dateLabel.textContent = 'No data';
+      setData(prev => [...prev, entry].sort((a, b) => a.month.localeCompare(b.month)));
     }
-    return;
-}
 
-const latest = portfolioData[portfolioData.length - 1];
-const previous = portfolioData[portfolioData.length - 2];
+    setNewEntry({ month: '', trade: '', btcSpot: '', copy: '', shares: '', xaubit: '', cash: '' });
+  };
 
-dateLabel.textContent = `${formatDateText(latest.date)} vs ${formatDateText(previous.date)}`;
+  // --- Handlers cho Chỉnh Sửa Trực Tiếp ---
+  const startEditing = (entry) => {
+    setEditingId(entry.id);
+    setEditForm({ ...entry });
+  };
 
-ASSET_CATEGORIES.forEach(cat => {
-    const curVal = parseFloat(latest[cat]) || 0;
-    const prevVal = parseFloat(previous[cat]) || 0;
-    const diff = curVal - prevVal;
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditForm({});
+  };
+
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const saveEdit = () => {
+    const trade = Number(editForm.trade) || 0;
+    const btcSpot = Number(editForm.btcSpot) || 0;
+    const copy = Number(editForm.copy) || 0;
+    const shares = Number(editForm.shares) || 0;
+    const xaubit = Number(editForm.xaubit) || 0;
+    const cash = Number(editForm.cash) || 0;
+    const total = trade + btcSpot + copy + shares + xaubit + cash;
+
+    const updatedData = data.map(item => 
+      item.id === editingId 
+        ? { ...editForm, trade, btcSpot, copy, shares, xaubit, cash, total } 
+        : item
+    );
+
+    // Sắp xếp lại theo tháng đề phòng người dùng đổi tháng
+    updatedData.sort((a, b) => a.month.localeCompare(b.month));
     
-    let pct = 0;
-    if (prevVal > 0) {
-        pct = (diff / prevVal) * 100;
-    } else if (curVal > 0) {
-        pct = 100; // If previously 0, now positive, show as 100% gain indicator
-    }
+    setData(updatedData);
+    setEditingId(null);
+  };
 
-    let colorClass = 'text-slate-500';
-    let icon = 'fas fa-minus';
-    let sign = '';
-    let bgClass = 'bg-slate-50';
-    let borderClass = 'border-slate-200';
-
-    if (diff > 0) {
-        colorClass = 'text-success';
-        icon = 'fas fa-arrow-trend-up';
-        sign = '+';
-        bgClass = 'bg-green-50/40';
-        borderClass = 'border-green-200';
-    } else if (diff < 0) {
-        colorClass = 'text-danger';
-        icon = 'fas fa-arrow-trend-down';
-        sign = '';
-        bgClass = 'bg-red-50/40';
-        borderClass = 'border-red-200';
-    }
-
-    const itemHTML = `
-        <div class="rounded-xl p-4 border ${borderClass} ${bgClass} flex flex-col justify-between hover:shadow-md transition-all duration-200">
-            <div class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full shadow-sm" style="background-color: ${COLORS[cat]}"></span>
-                ${cat}
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-800 font-sans">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Header */}
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 flex items-center gap-2">
+              <Activity className="text-blue-600" /> Theo Dõi Danh Mục Đầu Tư
+            </h1>
+            <p className="text-slate-500 mt-1">Quản lý và phân tích biến động tài sản hàng tháng</p>
+          </div>
+          {data.length > 0 && (
+            <div className="mt-4 md:mt-0 text-right bg-blue-50 p-4 rounded-xl border border-blue-100">
+              <p className="text-sm text-blue-600 font-medium">Tổng tài sản hiện tại ({latestData.length > 0 ? data[data.length-1].month : ''})</p>
+              <p className="text-3xl font-bold text-blue-700">
+                {formatCurrency(data[data.length - 1]?.total || 0)}
+              </p>
             </div>
-            <div>
-                <div class="text-lg font-bold text-slate-800 font-mono tracking-tight">${formatCurrency(curVal)}</div>
-                <div class="flex items-center gap-1.5 mt-2 ${colorClass}">
-                    <i class="${icon} text-[11px]"></i>
-                    <span class="text-sm font-semibold tracking-tight">${sign}${formatCurrency(diff)}</span>
+          )}
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Cột trái: Form thêm dữ liệu & Phân tích */}
+          <div className="lg:col-span-1 space-y-6">
+            
+            {/* Cập nhật tháng mới */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-blue-500" /> Cập Nhật Tháng Mới
+              </h2>
+              <form onSubmit={handleAddEntry} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Chọn Tháng</label>
+                  <input 
+                    type="month" 
+                    name="month"
+                    value={newEntry.month}
+                    onChange={handleNewEntryChange}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    required
+                  />
                 </div>
-                <div class="text-xs opacity-80 mt-1 ${colorClass} font-medium bg-white/50 w-fit px-1.5 py-0.5 rounded">
-                    ${sign}${formatPercent(pct)}
+                <div className="grid grid-cols-2 gap-4">
+                  {CATEGORIES.map(cat => (
+                    <div key={cat.key}>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">{cat.label}</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                        <input 
+                          type="number"
+                          name={cat.key}
+                          value={newEntry[cat.key]}
+                          onChange={handleNewEntryChange}
+                          className="w-full pl-7 p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors flex justify-center items-center gap-2">
+                  <Plus className="w-4 h-4" /> Thêm Dữ Liệu
+                </button>
+              </form>
             </div>
+
+            {/* Phân Tích Biến Động */}
+            {performanceAnalysis && (
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-emerald-500" /> Phân Tích Biến Động
+                </h2>
+                <p className="text-sm text-slate-500 mb-4">
+                  So sánh {performanceAnalysis.currentMonth} với {performanceAnalysis.previousMonth}
+                </p>
+                
+                <div className="space-y-3">
+                  {/* Tổng quan */}
+                  <div className={`p-3 rounded-lg border ${performanceAnalysis.totalDiff >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-semibold text-slate-700">Tổng Danh Mục</span>
+                      <span className={`font-bold flex items-center gap-1 ${performanceAnalysis.totalDiff >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {performanceAnalysis.totalDiff >= 0 ? <TrendingUp className="w-4 h-4"/> : <TrendingDown className="w-4 h-4"/>}
+                        {Math.abs(performanceAnalysis.totalPercentChange).toFixed(2)}%
+                      </span>
+                    </div>
+                    <div className={`text-sm ${performanceAnalysis.totalDiff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                      {performanceAnalysis.totalDiff >= 0 ? '+' : ''}{formatCurrency(performanceAnalysis.totalDiff)}
+                    </div>
+                  </div>
+
+                  {/* Từng danh mục */}
+                  <div className="pt-2">
+                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Chi tiết từng mảng</h3>
+                    {performanceAnalysis.details.map(item => (
+                      <div key={item.key} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></div>
+                          <span className="text-sm font-medium text-slate-700">{item.label}</span>
+                        </div>
+                        <div className="text-right">
+                          <div className={`text-sm font-medium ${item.diff > 0 ? 'text-emerald-600' : item.diff < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                            {item.diff > 0 ? '+' : ''}{formatCurrency(item.diff)}
+                          </div>
+                          <div className={`text-xs ${item.diff > 0 ? 'text-emerald-500' : item.diff < 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                            {item.diff > 0 ? '+' : ''}{item.percentChange.toFixed(1)}%
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Cột phải: Biểu đồ & Bảng Lịch sử */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* Đồ thị trực quan */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+              <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
+                <PieChartIcon className="w-5 h-5 text-indigo-500" /> Đồ Thị Trực Quan
+              </h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Biểu đồ xu hướng */}
+                <div className="h-64">
+                  <h3 className="text-sm font-medium text-slate-500 text-center mb-2">Xu Hướng Tổng Tài Sản</h3>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data}>
+                      <defs>
+                        <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{fontSize: 12, fill: '#64748b'}}
+                        tickFormatter={(value) => `$${value/1000}k`}
+                        width={60}
+                      />
+                      <RechartsTooltip 
+                        formatter={(value) => formatCurrency(value)}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      />
+                      <Area type="monotone" dataKey="total" name="Tổng tài sản" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Biểu đồ phân bổ */}
+                <div className="h-64">
+                  <h3 className="text-sm font-medium text-slate-500 text-center mb-2">Cơ Cấu Hiện Tại ({latestData.length > 0 ? data[data.length-1].month : ''})</h3>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={latestData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {latestData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip formatter={(value) => formatCurrency(value)} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }}/>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* Bảng Dữ Liệu Chi Tiết có thể chỉnh sửa */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-slate-500" /> Lịch Sử Dữ Liệu
+                </h2>
+                <p className="text-xs text-slate-400 italic">* Nhấn biểu tượng bút chì để sửa số liệu</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Tháng</th>
+                      {CATEGORIES.map(cat => (
+                         <th key={cat.key} className="px-4 py-3 font-medium text-right">{cat.label}</th>
+                      ))}
+                      <th className="px-4 py-3 font-bold text-right text-slate-700">Tổng</th>
+                      <th className="px-4 py-3 font-medium text-center">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.map((row) => {
+                      const isEditing = editingId === row.id;
+
+                      return (
+                        <tr key={row.id} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${isEditing ? 'bg-blue-50/30' : ''}`}>
+                          <td className="px-4 py-3 font-medium text-slate-700 whitespace-nowrap">
+                            {isEditing ? (
+                              <input 
+                                type="month" 
+                                name="month" 
+                                value={editForm.month} 
+                                onChange={handleEditChange}
+                                className="w-32 px-2 py-1 border rounded focus:ring-1 focus:ring-blue-500 outline-none"
+                              />
+                            ) : (
+                              row.month
+                            )}
+                          </td>
+                          
+                          {CATEGORIES.map(cat => (
+                            <td key={cat.key} className="px-4 py-3 text-right tabular-nums text-slate-600">
+                              {isEditing ? (
+                                <input 
+                                  type="number" 
+                                  name={cat.key} 
+                                  value={editForm[cat.key]} 
+                                  onChange={handleEditChange}
+                                  className="w-24 px-2 py-1 border rounded text-right focus:ring-1 focus:ring-blue-500 outline-none"
+                                />
+                              ) : (
+                                formatCurrency(row[cat.key])
+                              )}
+                            </td>
+                          ))}
+                          
+                          <td className="px-4 py-3 text-right font-bold text-blue-700 tabular-nums bg-blue-50/30">
+                            {formatCurrency(row.total)}
+                          </td>
+
+                          <td className="px-4 py-3 text-center">
+                            {isEditing ? (
+                              <div className="flex justify-center gap-2">
+                                <button onClick={saveEdit} className="p-1.5 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors" title="Lưu">
+                                  <Check className="w-4 h-4" />
+                                </button>
+                                <button onClick={cancelEditing} className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors" title="Hủy">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button onClick={() => startEditing(row)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Chỉnh sửa">
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {data.length === 0 && (
+                      <tr>
+                        <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                          Chưa có dữ liệu. Vui lòng cập nhật tháng mới.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+          </div>
         </div>
-    `;
-    grid.innerHTML += itemHTML;
-});
-};
-
-const updateAllViews = () => {
-updateDashboardSummaries();
-updateCategoryPerformance();
-renderTable();
-updateCharts();
-};
-
-const init = () => {
-            document.getElementById('currentYear').textContent = new Date().getFullYear();
-            loadData();
-            setupLiveCalculation();
-            resetForm(); // Sets default date
-            
-            // Set default date specifically for initial request (End of July) if empty
-            if(portfolioData.length === 0) {
-                 // Assuming year is current year for the request context, e.g. 2026-07
-                 const defaultYear = new Date().getFullYear();
-                 monthYearInput.value = `${defaultYear}-07`;
-            }
-
-            updateAllViews();
-            
-            // Handle window resize for charts
-            window.addEventListener('resize', () => {
-                if (growthChartInstance) growthChartInstance.resize();
-                if (allocationChartInstance) allocationChartInstance.resize();
-            });
-        };
-
-        // Boot up
-        init();
-
-    </script>
-</body>
-</html>
+      </div>
+    </div>
+  );
+}
